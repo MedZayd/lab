@@ -1,0 +1,263 @@
+==========================================================================
+ KUBERNETES CHEAT SHEET
+==========================================================================
+ Notes:
+   - `kubectl` is the main Kubernetes CLI. `kb` below is a personal alias
+     for `kubectl` (see the "Aliases" section).
+   - `kubectx` / `kubens` are helper tools (installed separately) for
+     switching clusters (contexts) and namespaces quickly.
+   - A "context" = which cluster + user + namespace kubectl talks to.
+   - A "namespace" = a virtual sub-cluster used to isolate resources.
+
+
+--------------------------------------------------------------------------
+ CONTEXTS (which cluster am I talking to?)
+--------------------------------------------------------------------------
+
+Get the list of contexts
+> kubectx
+> kb config get-contexts              # pure kubectl equivalent
+
+Show the currently active context
+> kubectx -c
+> kb config current-context
+
+Switch to a context
+> kubectx "<name_of_ctx>"
+> kb config use-context "<name_of_ctx>"
+
+Rename a context
+> kubectx <new_name>=<old_name>
+
+Switch back to the previous context (like `cd -`)
+> kubectx -
+
+Delete a context entry from your kubeconfig
+> kb config delete-context "<name_of_ctx>"
+
+
+--------------------------------------------------------------------------
+ NAMESPACES (isolated groups of resources within a cluster)
+--------------------------------------------------------------------------
+
+List all namespaces
+> kb get namespaces
+> kb get ns                            # short form
+
+Switch the default namespace for the current context
+> kubens "<namespace>"
+> kb config set-context --current --namespace="<namespace>"
+
+Create a namespace
+> kb create namespace "<namespace>"
+
+Delete a namespace (and everything inside it — careful!)
+> kb delete namespace "<namespace>"
+
+
+--------------------------------------------------------------------------
+ PODS (the smallest deployable unit — wraps one or more containers)
+--------------------------------------------------------------------------
+
+Get the list of running pods in the default namespace
+> kb get pods
+
+Get the list of running pods across ALL namespaces
+> kb get pods --all-namespaces
+> kb get pods -A                       # short form
+
+List pods in a specific namespace
+> kb get pods -n "<namespace>"
+
+List pods with extra info (node, IP, etc.)
+> kb get pods -o wide
+
+Watch pods live (auto-refresh as they change state)
+> kb get pods -w
+
+Filter pods by label
+> kb get pods -l app=nginx
+
+Run a pod (quick, one-off — good for testing)
+> kb run nginx-test --image=nginx
+
+Run a temporary pod and drop into a shell, delete it on exit
+> kb run -it --rm debug --image=busybox -- sh
+
+Show detailed info + events for a pod (great for debugging)
+> kb describe pod "<pod_name>"
+
+Delete a pod (a controller will recreate it if one manages it)
+> kb delete pod "<pod_name>"
+
+
+--------------------------------------------------------------------------
+ LOGS & EXEC (look inside running containers)
+--------------------------------------------------------------------------
+
+View a pod's logs
+> kb logs "<pod_name>"
+
+Follow logs live (like `tail -f`)
+> kb logs -f "<pod_name>"
+
+Logs from a specific container in a multi-container pod
+> kb logs "<pod_name>" -c "<container_name>"
+
+Logs from the PREVIOUS crashed instance of a container
+> kb logs "<pod_name>" --previous
+
+Open an interactive shell inside a running pod
+> kb exec -it "<pod_name>" -- sh
+> kb exec -it "<pod_name>" -- bash     # if bash is available
+
+Run a single command inside a pod
+> kb exec "<pod_name>" -- <command>
+
+Copy files to / from a pod
+> kb cp "<pod_name>":/path/in/pod ./local/path
+> kb cp ./local/path "<pod_name>":/path/in/pod
+
+
+--------------------------------------------------------------------------
+ DEPLOYMENTS (manage replicas, rollouts & self-healing pods)
+--------------------------------------------------------------------------
+
+List deployments
+> kb get deployments
+> kb get deploy                        # short form
+
+Create a deployment
+> kb create deployment nginx --image=nginx
+
+Scale a deployment up/down (number of pod replicas)
+> kb scale deployment nginx --replicas=3
+
+Update the image (triggers a rolling update)
+> kb set image deployment/nginx nginx=nginx:1.25
+
+Check rollout status
+> kb rollout status deployment/nginx
+
+View rollout history
+> kb rollout history deployment/nginx
+
+Roll back to the previous version
+> kb rollout undo deployment/nginx
+
+Restart all pods in a deployment (rolling restart)
+> kb rollout restart deployment/nginx
+
+Delete a deployment
+> kb delete deployment nginx
+
+
+--------------------------------------------------------------------------
+ SERVICES & NETWORKING (expose pods to each other / the world)
+--------------------------------------------------------------------------
+
+List services
+> kb get services
+> kb get svc                           # short form
+
+Expose a deployment as a service
+> kb expose deployment nginx --port=80 --type=ClusterIP
+
+Port-forward a local port to a pod/service (access it locally)
+> kb port-forward pod/"<pod_name>" 8080:80
+> kb port-forward svc/"<service>" 8080:80
+
+List ingresses (HTTP routing rules into the cluster)
+> kb get ingress
+
+
+--------------------------------------------------------------------------
+ CONFIG & SECRETS (inject configuration into pods)
+--------------------------------------------------------------------------
+
+List config maps (non-sensitive key/value config)
+> kb get configmaps
+
+Create a config map from literal values
+> kb create configmap app-config --from-literal=KEY=value
+
+List secrets (base64-encoded sensitive data)
+> kb get secrets
+
+Create a secret from literal values
+> kb create secret generic db-secret --from-literal=password=1234
+
+
+--------------------------------------------------------------------------
+ APPLYING MANIFESTS (declarative, YAML-driven — the real workflow)
+--------------------------------------------------------------------------
+
+Apply a manifest (create or update resources to match the file)
+> kb apply -f manifest.yaml
+
+Apply every manifest in a directory
+> kb apply -f ./k8s/
+
+Delete resources defined in a manifest
+> kb delete -f manifest.yaml
+
+Preview changes without applying them (dry run)
+> kb apply -f manifest.yaml --dry-run=client
+
+Generate YAML from a command without creating anything
+> kb create deployment nginx --image=nginx --dry-run=client -o yaml
+
+
+--------------------------------------------------------------------------
+ INSPECTING & DEBUGGING (general-purpose)
+--------------------------------------------------------------------------
+
+Describe any resource (detailed status + events)
+> kb describe <type> "<name>"
+
+Get a resource as YAML / JSON
+> kb get pod "<pod_name>" -o yaml
+> kb get pod "<pod_name>" -o json
+
+Show cluster-wide events (recent, sorted by time)
+> kb get events --sort-by=.metadata.creationTimestamp
+
+Show resource usage (needs metrics-server installed)
+> kb top nodes
+> kb top pods
+
+List the cluster's nodes (worker/control-plane machines)
+> kb get nodes
+
+List (almost) every resource type in the current namespace
+> kb get all
+
+See what API resource types exist and their short names
+> kb api-resources
+
+Explain the fields of a resource type (built-in docs)
+> kb explain pod
+> kb explain pod.spec.containers
+
+
+--------------------------------------------------------------------------
+ ALIASES (save typing)
+--------------------------------------------------------------------------
+
+Add a `kb` alias for kubectl (note: `echo`, not `cho`)
+> echo 'alias kb=kubectl' >> ~/.zshrc
+> source ~/.zshrc                       # reload shell config
+
+Enable kubectl tab-completion for the alias (optional)
+> echo 'source <(kubectl completion zsh)' >> ~/.zshrc
+> echo 'compdef kb=kubectl' >> ~/.zshrc
+
+
+==========================================================================
+ QUICK REFERENCE — common short names
+==========================================================================
+   po    = pods            deploy = deployments     svc = services
+   ns    = namespaces      cm     = configmaps      ing = ingress
+   no    = nodes           rs     = replicasets     sts = statefulsets
+   -A / --all-namespaces   -n <ns> = namespace      -o wide/yaml/json
+==========================================================================
